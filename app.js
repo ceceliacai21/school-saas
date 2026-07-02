@@ -51,6 +51,7 @@
   const defaultState = {
     role: "teacher",
     activeModule: "materials",
+    sidebarCollapsed: false,
     accounts: [
       { id: uid(), name: "周校长", role: "admin", phone: "13800000001", status: "启用" },
       { id: uid(), name: "林老师", role: "teacher", phone: "13800000002", status: "启用" },
@@ -91,7 +92,9 @@
     roleHint: document.getElementById("roleHint"),
     userInitial: document.getElementById("userInitial"),
     userName: document.getElementById("userName"),
-    userRoleName: document.getElementById("userRoleName")
+    userRoleName: document.getElementById("userRoleName"),
+    appShell: document.getElementById("appShell"),
+    sidebarToggle: document.getElementById("sidebarToggle")
   };
 
   init();
@@ -99,6 +102,7 @@
   function init() {
     normalizeState();
     renderRoleSelect();
+    bindSidebarToggle();
     renderChrome();
     render();
   }
@@ -119,6 +123,7 @@
   function normalizeState() {
     if (state.role === "assistant") state.role = "teacher";
     if (!roles[state.role]) state.role = "teacher";
+    state.sidebarCollapsed = Boolean(state.sidebarCollapsed);
     const allowed = roles[state.role].permissions;
     const moduleExists = modules.some((item) => item.id === state.activeModule);
     if (!moduleExists || !allowed.includes(state.activeModule)) {
@@ -160,6 +165,11 @@
     els.userInitial.textContent = role.initial;
     els.userName.textContent = role.user;
     els.userRoleName.textContent = role.name;
+    els.appShell.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+    els.sidebarToggle.textContent = state.sidebarCollapsed ? "▶" : "◀";
+    els.sidebarToggle.title = state.sidebarCollapsed ? "展开侧栏" : "收起侧栏";
+    els.sidebarToggle.setAttribute("aria-label", els.sidebarToggle.title);
+    els.sidebarToggle.setAttribute("aria-expanded", String(!state.sidebarCollapsed));
 
     els.nav.innerHTML = modules
       .filter((item) => role.permissions.includes(item.id))
@@ -176,6 +186,14 @@
         renderChrome();
         render();
       });
+    });
+  }
+
+  function bindSidebarToggle() {
+    els.sidebarToggle.addEventListener("click", () => {
+      state.sidebarCollapsed = !state.sidebarCollapsed;
+      saveState();
+      renderChrome();
     });
   }
 

@@ -43,6 +43,11 @@ button {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
   min-height: calc(100vh - 82px);
+  transition: grid-template-columns 180ms ease;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 
 .app-header {
@@ -70,6 +75,12 @@ button {
   padding: 18px 14px;
   background: #17212a;
   color: #f8fbfc;
+  overflow: hidden;
+}
+
+.sidebar-collapsed .sidebar {
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .brand {
@@ -153,6 +164,30 @@ button {
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 22px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.sidebar-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary-strong);
 }
 
 .eyebrow {
@@ -563,6 +598,14 @@ tr:last-child td {
 
   .app-shell {
     grid-template-columns: 1fr;
+  }
+
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell.sidebar-collapsed .sidebar {
+    display: none;
   }
 
   .sidebar {
