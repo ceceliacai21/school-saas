@@ -4,6 +4,7 @@
   const supabaseClient = window.supabase && cloudConfig
     ? window.supabase.createClient(cloudConfig.url, cloudConfig.publishableKey)
     : null;
+  const demoMode = cloudConfig?.demoMode !== false;
   const COURSE_CATEGORIES = [
     "图像记忆法",
     "思维导图记忆法",
@@ -120,7 +121,7 @@
     bindAuthControls();
     renderChrome();
     render();
-    await initializeCloud();
+    if (!demoMode) await initializeCloud();
   }
 
   function loadState() {
@@ -182,7 +183,8 @@
     els.userName.textContent = role.user;
     els.userRoleName.textContent = role.name;
     els.roleSelect.value = state.role;
-    els.roleSelect.disabled = Boolean(supabaseClient);
+    els.roleSelect.disabled = Boolean(supabaseClient && !demoMode);
+    els.authButton.hidden = demoMode;
     els.authButton.textContent = cloudSession ? "退出" : "登录";
     if (cloudSession) {
       const displayName = cloudProfile?.display_name || cloudSession.user.email || role.user;
@@ -318,6 +320,7 @@
   }
 
   function materialItems() {
+    if (demoMode) return state.materials;
     return cloudInitialized ? cloudMaterials : [];
   }
 
@@ -501,7 +504,9 @@
 
   function renderMaterials() {
     const materials = materialItems();
-    const canManageMaterials = Boolean(cloudSession && cloudProfile && ["admin", "teacher"].includes(cloudProfile.role));
+    const canManageMaterials = demoMode
+      ? ["admin", "teacher"].includes(state.role)
+      : Boolean(cloudSession && cloudProfile && ["admin", "teacher"].includes(cloudProfile.role));
     els.content.innerHTML = `
       <section class="${canManageMaterials ? "split" : ""}">
         ${canManageMaterials ? `<form id="addMaterial" class="form-panel">
@@ -514,7 +519,7 @@
             <div class="field full">
               <label for="materialFile">文件</label>
               <input id="materialFile" name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" required />
-              <span class="field-hint">文件将保存到 Supabase 私有课件库，单个文件不超过 50 MB。</span>
+              <span class="field-hint">${demoMode ? "演示模式记录文件名；启用云端后保存真实文件。" : "文件将保存到 Supabase 私有课件库，单个文件不超过 50 MB。"}</span>
             </div>
             ${textarea("notes", "课件说明")}
           </div>
@@ -811,6 +816,19 @@
   }
 
   async function uploadMaterial(data, form) {
+    if (demoMode) {
+      const file = form.querySelector("input[type=file]").files[0];
+      state.materials.unshift({
+        id: uid(),
+        ...data,
+        fileName: file ? file.name : "未选择文件",
+        source: "demo"
+      });
+      saveState();
+      notify("课件已保存到演示数据。", "success");
+      render();
+      return;
+    }
     if (!cloudSession || !cloudProfile || !["admin", "teacher"].includes(cloudProfile.role)) return;
     const file = form.querySelector("input[type=file]").files[0];
     if (!file) return notify("请选择课件文件。", "error");
@@ -859,6 +877,19 @@
   }
 
   async function downloadMaterial(id) {
+    if (demoMode) {
+      const item = state.materials.find((material) => material.id === id);
+      if (!item) return;
+      const content = `课件下载模拟\n名称：${item.title}\n文件：${item.fileName}\n年级：${item.grade}\n分类：${item.category}\n说明：${item.notes || ""}`;
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${item.title}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     if (!cloudSession) return notify("请先登录后下载课件。", "error");
     const item = cloudMaterials.find((material) => material.id === id);
     if (!item) return;
@@ -874,6 +905,16 @@
   }
 
   async function deleteMaterial(id) {
+    if (demoMode) {
+      if (!["admin", "teacher"].includes(state.role)) return;
+      const item = state.materials.find((material) => material.id === id);
+      if (!item || !window.confirm(`确定删除课件“${item.title}”吗？`)) return;
+      state.materials = state.materials.filter((material) => material.id !== id);
+      saveState();
+      notify("课件已删除。", "success");
+      render();
+      return;
+    }
     if (!cloudSession || !cloudProfile || !["admin", "teacher"].includes(cloudProfile.role)) return;
     const item = cloudMaterials.find((material) => material.id === id);
     if (!item || !window.confirm(`确定删除课件“${item.title}”吗？`)) return;
