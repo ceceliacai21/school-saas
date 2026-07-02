@@ -401,6 +401,12 @@ h3 {
   margin-top: 14px;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .primary,
 .secondary,
 .text-button,

@@ -1,5 +1,12 @@
 (function () {
   const STORAGE_KEY = "school-saas-admin-state-v1";
+  const COURSE_CATEGORIES = [
+    "图像记忆法",
+    "思维导图记忆法",
+    "记忆宫殿法",
+    "大脑潜能训练",
+    "思维能力训练"
+  ];
 
   const roles = {
     admin: {
@@ -59,11 +66,11 @@
       { id: uid(), name: "六年级阅读写作 B 班", grade: "六年级", teacher: "林老师", schedule: "周日 14:00", capacity: 10 }
     ],
     courses: [
-      { id: uid(), name: "英语阅读理解", grade: "五年级", category: "英语", teacher: "林老师", hours: 16 },
-      { id: uid(), name: "语文写作强化", grade: "六年级", category: "语文", teacher: "林老师", hours: 12 }
+      { id: uid(), name: "古诗图像记忆", grade: "五年级", category: "图像记忆法", teacher: "林老师", hours: 16 },
+      { id: uid(), name: "知识网络构建", grade: "六年级", category: "思维导图记忆法", teacher: "林老师", hours: 12 }
     ],
     materials: [
-      { id: uid(), title: "五年级英语阅读第 1 讲", grade: "五年级", category: "英语", year: "2026", fileName: "reading-lesson-1.pdf", source: "seed", notes: "可作为后续知识库 ground truth。" }
+      { id: uid(), title: "图像记忆法第 1 讲", grade: "五年级", category: "图像记忆法", year: "2026", fileName: "image-memory-lesson-1.pdf", source: "seed", notes: "可作为后续知识库 ground truth。" }
     ],
     feedback: [
       { id: uid(), date: "2026-06-22", student: "王一诺", course: "英语阅读理解", attendance: "到课", focus: 4, participation: 5, homework: 4, comment: "课堂互动积极，主旨题稳定，细节定位还需要练习。" }
@@ -117,6 +124,15 @@
     if (!moduleExists || !allowed.includes(state.activeModule)) {
       state.activeModule = allowed[0];
     }
+    state.courses = state.courses.map((item) => ({
+      ...item,
+      category: COURSE_CATEGORIES.includes(item.category) ? item.category : COURSE_CATEGORIES[0]
+    }));
+    state.materials = state.materials.map((item) => ({
+      ...item,
+      category: COURSE_CATEGORIES.includes(item.category) ? item.category : COURSE_CATEGORIES[0]
+    }));
+    saveState();
   }
 
   function uid() {
@@ -342,9 +358,10 @@
   }
 
   function renderMaterials() {
+    const canManageMaterials = ["admin", "teacher"].includes(state.role);
     els.content.innerHTML = `
-      <section class="split">
-        <form id="addMaterial" class="form-panel">
+      <section class="${canManageMaterials ? "split" : ""}">
+        ${canManageMaterials ? `<form id="addMaterial" class="form-panel">
           <h2>上传课件</h2>
           <div class="form-grid">
             ${input("title", "课件名称")}
@@ -359,7 +376,7 @@
             ${textarea("notes", "课件说明")}
           </div>
           <div class="actions"><button class="primary" type="submit">保存课件</button></div>
-        </form>
+        </form>` : ""}
         <div class="table-wrap">
           <div class="band">
             <h2>课件库</h2>
@@ -375,11 +392,13 @@
         </div>
       </section>
     `;
-    bindForm("addMaterial", (data, form) => {
-      const file = form.querySelector("input[type=file]").files[0];
-      state.materials.unshift({ id: uid(), ...data, fileName: file ? file.name : "未选择文件", source: "local" });
-      saveAndRender();
-    });
+    if (canManageMaterials) {
+      bindForm("addMaterial", (data, form) => {
+        const file = form.querySelector("input[type=file]").files[0];
+        state.materials.unshift({ id: uid(), ...data, fileName: file ? file.name : "未选择文件", source: "local" });
+        saveAndRender();
+      });
+    }
     const renderRows = () => {
       const query = document.getElementById("materialSearch").value.trim().toLowerCase();
       const filter = document.getElementById("materialFilter").value;
@@ -392,11 +411,19 @@
           <td><strong>${item.title}</strong><br><small>${item.fileName}</small></td>
           <td><div class="tag-list">${tag(item.grade, "good")}${tag(item.category)}</div></td>
           <td>${item.year}</td>
-          <td><button class="secondary" data-download="${item.id}">下载</button></td>
+          <td>
+            <div class="row-actions">
+              <button class="secondary" data-download="${item.id}">下载</button>
+              ${canManageMaterials ? `<button class="danger" data-delete-material="${item.id}">删除</button>` : ""}
+            </div>
+          </td>
         </tr>
       `).join("") : emptyRow(4);
       document.querySelectorAll("[data-download]").forEach((button) => {
         button.addEventListener("click", () => downloadMaterial(button.dataset.download));
+      });
+      document.querySelectorAll("[data-delete-material]").forEach((button) => {
+        button.addEventListener("click", () => deleteMaterial(button.dataset.deleteMaterial));
       });
     };
     document.getElementById("materialSearch").addEventListener("input", renderRows);
@@ -619,7 +646,7 @@
   }
 
   function categories() {
-    return ["语文", "数学", "英语", "科学", "综合素养"];
+    return COURSE_CATEGORIES;
   }
 
   function scoreOptions() {
@@ -654,5 +681,13 @@
     link.download = `${item.title}.txt`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  function deleteMaterial(id) {
+    if (!["admin", "teacher"].includes(state.role)) return;
+    const item = state.materials.find((material) => material.id === id);
+    if (!item || !window.confirm(`确定删除课件“${item.title}”吗？`)) return;
+    state.materials = state.materials.filter((material) => material.id !== id);
+    saveAndRender();
   }
 })();
