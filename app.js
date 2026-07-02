@@ -284,7 +284,7 @@
         await loadCloudMaterials();
       }
     } else {
-      state.role = "student";
+      state.role = "teacher";
     }
     normalizeState();
     renderChrome();
