@@ -1,5 +1,7 @@
 (function () {
   const STORAGE_KEY = "school-saas-admin-state-v1";
+  const DEMO_FILE_DB = "school-saas-demo-files";
+  const DEMO_FILE_STORE = "materials";
   const cloudConfig = window.SUPABASE_CONFIG;
   const supabaseClient = window.supabase && cloudConfig
     ? window.supabase.createClient(cloudConfig.url, cloudConfig.publishableKey)
@@ -519,7 +521,7 @@
             <div class="field full">
               <label for="materialFile">文件</label>
               <input id="materialFile" name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" required />
-              <span class="field-hint">${demoMode ? "演示模式记录文件名；启用云端后保存真实文件。" : "文件将保存到 Supabase 私有课件库，单个文件不超过 50 MB。"}</span>
+              <span class="field-hint">${demoMode ? "演示文件保存在当前浏览器，可上传并下载原文件。" : "文件将保存到 Supabase 私有课件库，单个文件不超过 50 MB。"}</span>
             </div>
             ${textarea("notes", "课件说明")}
           </div>
@@ -816,12 +818,22 @@
   }
 
   async function uploadMaterial(data, form) {
+    const file = form.querySelector("input[type=file]").files[0];
+    if (!file) return notify("请选择课件文件。", "error");
+    if (file.size > 50 * 1024 * 1024) return notify("课件文件不能超过 50 MB。", "error");
     if (demoMode) {
-      const file = form.querySelector("input[type=file]").files[0];
+      const materialId = uid();
+      const blobKey = `material-${materialId}`;
+      try {
+        await storeDemoFile(blobKey, file);
+      } catch (error) {
+        return notify("浏览器无法保存该文件，请检查存储权限。", "error");
+      }
       state.materials.unshift({
-        id: uid(),
+        id: materialId,
         ...data,
-        fileName: file ? file.name : "未选择文件",
+        fileName: file.name,
+        blobKey,
         source: "demo"
       });
       saveState();
@@ -830,9 +842,6 @@
       return;
     }
     if (!cloudSession || !cloudProfile || !["admin", "teacher"].includes(cloudProfile.role)) return;
-    const file = form.querySelector("input[type=file]").files[0];
-    if (!file) return notify("请选择课件文件。", "error");
-    if (file.size > 50 * 1024 * 1024) return notify("课件文件不能超过 50 MB。", "error");
 
     const submitButton = form.querySelector("button[type=submit]");
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
@@ -880,6 +889,23 @@
     if (demoMode) {
       const item = state.materials.find((material) => material.id === id);
       if (!item) return;
+      if (item.blobKey) {
+        let file;
+        try {
+          file = await getDemoFile(item.blobKey);
+        } catch (error) {
+          return notify("读取本地课件失败，请重新上传。", "error");
+        }
+        if (file) {
+          const fileUrl = URL.createObjectURL(file);
+          const fileLink = document.createElement("a");
+          fileLink.href = fileUrl;
+          fileLink.download = item.fileName;
+          fileLink.click();
+          URL.revokeObjectURL(fileUrl);
+          return;
+        }
+      }
       const content = `课件下载模拟\n名称：${item.title}\n文件：${item.fileName}\n年级：${item.grade}\n分类：${item.category}\n说明：${item.notes || ""}`;
       const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -909,6 +935,13 @@
       if (!["admin", "teacher"].includes(state.role)) return;
       const item = state.materials.find((material) => material.id === id);
       if (!item || !window.confirm(`确定删除课件“${item.title}”吗？`)) return;
+      if (item.blobKey) {
+        try {
+          await removeDemoFile(item.blobKey);
+        } catch (error) {
+          return notify("删除本地课件文件失败。", "error");
+        }
+      }
       state.materials = state.materials.filter((material) => material.id !== id);
       saveState();
       notify("课件已删除。", "success");
@@ -939,5 +972,65 @@
     notify.timer = window.setTimeout(() => {
       els.appNotice.className = "app-notice";
     }, 4200);
+  }
+
+  function openDemoFileDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DEMO_FILE_DB, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(DEMO_FILE_STORE)) {
+          request.result.createObjectStore(DEMO_FILE_STORE);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function storeDemoFile(key, file) {
+    const database = await openDemoFileDb();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(DEMO_FILE_STORE, "readwrite");
+      transaction.objectStore(DEMO_FILE_STORE).put(file, key);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error);
+      };
+    });
+  }
+
+  async function getDemoFile(key) {
+    const database = await openDemoFileDb();
+    return new Promise((resolve, reject) => {
+      const request = database.transaction(DEMO_FILE_STORE).objectStore(DEMO_FILE_STORE).get(key);
+      request.onsuccess = () => {
+        database.close();
+        resolve(request.result);
+      };
+      request.onerror = () => {
+        database.close();
+        reject(request.error);
+      };
+    });
+  }
+
+  async function removeDemoFile(key) {
+    const database = await openDemoFileDb();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(DEMO_FILE_STORE, "readwrite");
+      transaction.objectStore(DEMO_FILE_STORE).delete(key);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error);
+      };
+    });
   }
 })();
