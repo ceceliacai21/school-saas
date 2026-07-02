@@ -1,0 +1,10 @@
+{
+  "name": "school-saas-admin-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "build": "node --check app.js",
+    "check": "node --check app.js"
+  }
+}

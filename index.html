@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>教学运营平台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark">ED</span>
+        <div>
+          <strong>教学运营平台</strong>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="role-control">
+          <label for="roleSelect">当前角色</label>
+          <select id="roleSelect"></select>
+          <small id="roleHint"></small>
+        </div>
+        <div class="user-chip">
+          <span id="userInitial">T</span>
+          <div>
+            <strong id="userName">林老师</strong>
+            <small id="userRoleName">教师</small>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <nav id="nav" class="nav"></nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">教育培训公司</p>
+            <h1 id="pageTitle">后台管理系统</h1>
+          </div>
+        </header>
+
+        <section id="content" class="content"></section>
+      </main>
+    </div>
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">
+        <strong>暂无数据</strong>
+        <span>完成左侧当前流程后，这里会显示记录。</span>
+      </div>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
