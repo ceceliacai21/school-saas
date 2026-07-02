@@ -9,7 +9,7 @@
 
 - 账号、角色、权限
 - 学生、班级、课程管理
-- 课件上传、分类、下载模拟
+- 课件上传、分类、云端下载
 - 每节课课堂反馈记录
 - 成绩与多维评分
 - 学生阶段报告初稿生成
@@ -47,13 +47,22 @@ npm run dev
 http://localhost:4173
 ```
 
+## Supabase 初始化
+
+1. 在 Supabase Dashboard 打开 `SQL Editor`。
+2. 新建查询，粘贴并执行 `supabase-setup.sql`。
+3. 在 `Authentication > Users` 创建第一个账号。
+4. 在 SQL Editor 执行脚本末尾的角色更新语句，将该账号设为 `admin`。
+5. 回到网页，使用该账号登录后即可上传、下载和删除云端课件。
+
+前端只使用 Publishable key。不要把 Secret key、`service_role` key 或数据库密码写入项目。
+
 ## 当前边界
 
-这一版使用浏览器 `localStorage` 保存数据，适合快速试流程和确认字段。正式产品建议下一步接入：
+课件文件和课件元数据已接入 Supabase；其他教学数据仍使用浏览器 `localStorage` 保存。下一步包括：
 
-- PostgreSQL 数据库
-- 服务端鉴权与 RBAC 权限
-- OSS/S3 文件云存储
+- 将学生、班级、成绩和报告迁移到 PostgreSQL
+- 完善账号邀请和密码重置
 - 结构化报告生成接口
 - 文档解析、向量索引和 RAG 问答
 - HTML 模板转 PDF

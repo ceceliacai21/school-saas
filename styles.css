@@ -39,6 +39,12 @@ button {
   cursor: pointer;
 }
 
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -66,6 +72,10 @@ button {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.auth-button {
+  min-width: 64px;
 }
 
 .sidebar {
@@ -188,6 +198,22 @@ button {
 .sidebar-toggle:hover {
   border-color: var(--primary);
   color: var(--primary-strong);
+}
+
+.icon-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+}
+
+.icon-button:hover {
+  background: var(--soft);
+  color: var(--ink);
 }
 
 .eyebrow {
@@ -548,6 +574,73 @@ tr:last-child td {
   min-height: 160px;
   color: var(--muted);
   text-align: center;
+}
+
+.auth-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(20, 32, 42, 0.24);
+}
+
+.auth-dialog::backdrop {
+  background: rgba(20, 32, 42, 0.54);
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dialog-heading h2 {
+  margin-bottom: 0;
+}
+
+.form-error {
+  min-height: 20px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.app-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.app-notice.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-notice.success {
+  border-color: rgba(31, 122, 109, 0.35);
+}
+
+.app-notice.error {
+  border-color: rgba(182, 71, 71, 0.4);
+  color: var(--danger);
 }
 
 .report-preview {

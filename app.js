@@ -1,5 +1,9 @@
 (function () {
   const STORAGE_KEY = "school-saas-admin-state-v1";
+  const cloudConfig = window.SUPABASE_CONFIG;
+  const supabaseClient = window.supabase && cloudConfig
+    ? window.supabase.createClient(cloudConfig.url, cloudConfig.publishableKey)
+    : null;
   const COURSE_CATEGORIES = [
     "图像记忆法",
     "思维导图记忆法",
@@ -83,6 +87,10 @@
   };
 
   let state = loadState();
+  let cloudSession = null;
+  let cloudProfile = null;
+  let cloudMaterials = [];
+  let cloudInitialized = false;
 
   const els = {
     nav: document.getElementById("nav"),
@@ -94,17 +102,25 @@
     userName: document.getElementById("userName"),
     userRoleName: document.getElementById("userRoleName"),
     appShell: document.getElementById("appShell"),
-    sidebarToggle: document.getElementById("sidebarToggle")
+    sidebarToggle: document.getElementById("sidebarToggle"),
+    authButton: document.getElementById("authButton"),
+    authDialog: document.getElementById("authDialog"),
+    authForm: document.getElementById("authForm"),
+    authError: document.getElementById("authError"),
+    closeAuthDialog: document.getElementById("closeAuthDialog"),
+    appNotice: document.getElementById("appNotice")
   };
 
   init();
 
-  function init() {
+  async function init() {
     normalizeState();
     renderRoleSelect();
     bindSidebarToggle();
+    bindAuthControls();
     renderChrome();
     render();
+    await initializeCloud();
   }
 
   function loadState() {
@@ -165,6 +181,14 @@
     els.userInitial.textContent = role.initial;
     els.userName.textContent = role.user;
     els.userRoleName.textContent = role.name;
+    els.roleSelect.value = state.role;
+    els.roleSelect.disabled = Boolean(supabaseClient);
+    els.authButton.textContent = cloudSession ? "退出" : "登录";
+    if (cloudSession) {
+      const displayName = cloudProfile?.display_name || cloudSession.user.email || role.user;
+      els.userName.textContent = displayName;
+      els.userInitial.textContent = displayName.slice(0, 1).toUpperCase();
+    }
     els.appShell.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
     els.sidebarToggle.textContent = state.sidebarCollapsed ? "▶" : "◀";
     els.sidebarToggle.title = state.sidebarCollapsed ? "展开侧栏" : "收起侧栏";
@@ -197,6 +221,106 @@
     });
   }
 
+  function bindAuthControls() {
+    els.authButton.addEventListener("click", async () => {
+      if (cloudSession) {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) notify(error.message, "error");
+        return;
+      }
+      els.authError.textContent = "";
+      els.authDialog.showModal();
+    });
+    els.closeAuthDialog.addEventListener("click", () => els.authDialog.close());
+    els.authForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitButton = els.authForm.querySelector("button[type=submit]");
+      const data = Object.fromEntries(new FormData(els.authForm).entries());
+      submitButton.disabled = true;
+      els.authError.textContent = "";
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: data.email,
+        password: data.password
+      });
+      submitButton.disabled = false;
+      if (error) {
+        els.authError.textContent = "邮箱或密码不正确。";
+        return;
+      }
+      els.authForm.reset();
+      els.authDialog.close();
+    });
+  }
+
+  async function initializeCloud() {
+    if (!supabaseClient) {
+      notify("云端组件加载失败，请检查网络后刷新。", "error");
+      return;
+    }
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) notify(error.message, "error");
+    await applyCloudSession(data.session);
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => applyCloudSession(session), 0);
+    });
+  }
+
+  async function applyCloudSession(session) {
+    cloudSession = session;
+    cloudProfile = null;
+    cloudMaterials = [];
+    cloudInitialized = true;
+    if (session) {
+      const { data: profile, error: profileError } = await supabaseClient
+        .from("profiles")
+        .select("display_name, role")
+        .eq("id", session.user.id)
+        .single();
+      if (profileError) {
+        notify("云端尚未初始化，请先执行 Supabase SQL 脚本。", "error");
+      } else {
+        cloudProfile = profile;
+        if (roles[profile.role]) state.role = profile.role;
+        await loadCloudMaterials();
+      }
+    } else {
+      state.role = "student";
+    }
+    normalizeState();
+    renderChrome();
+    render();
+  }
+
+  async function loadCloudMaterials() {
+    const { data, error } = await supabaseClient
+      .from("materials")
+      .select("id, title, grade, category, year, file_name, storage_path, notes, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      notify(`读取课件失败：${error.message}`, "error");
+      return;
+    }
+    cloudMaterials = data.map(mapCloudMaterial);
+  }
+
+  function mapCloudMaterial(item) {
+    return {
+      id: item.id,
+      title: item.title,
+      grade: item.grade,
+      category: item.category,
+      year: item.year,
+      fileName: item.file_name,
+      storagePath: item.storage_path,
+      notes: item.notes,
+      source: "supabase"
+    };
+  }
+
+  function materialItems() {
+    return cloudInitialized ? cloudMaterials : [];
+  }
+
   function render() {
     const module = modules.find((item) => item.id === state.activeModule) || modules[0];
     els.title.textContent = module.label;
@@ -225,7 +349,7 @@
           <p>常用工作先收在两个入口里：备课找资料走课件知识库，课后跟进学生走学生管理平台。</p>
         </div>
         <div class="hero-stats">
-          ${metric("课件", state.materials.length, "已分类资源")}
+          ${metric("课件", materialItems().length, "云端分类资源")}
           ${metric("学生", state.students.length, "当前在读学生")}
         </div>
       </section>
@@ -376,7 +500,8 @@
   }
 
   function renderMaterials() {
-    const canManageMaterials = ["admin", "teacher"].includes(state.role);
+    const materials = materialItems();
+    const canManageMaterials = Boolean(cloudSession && cloudProfile && ["admin", "teacher"].includes(cloudProfile.role));
     els.content.innerHTML = `
       <section class="${canManageMaterials ? "split" : ""}">
         ${canManageMaterials ? `<form id="addMaterial" class="form-panel">
@@ -388,8 +513,8 @@
             ${input("year", "年份", "number", "2026")}
             <div class="field full">
               <label for="materialFile">文件</label>
-              <input id="materialFile" name="file" type="file" />
-              <span class="field-hint">当前 MVP 记录文件名和下载模拟；后续替换为 OSS/S3 云存储。</span>
+              <input id="materialFile" name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" required />
+              <span class="field-hint">文件将保存到 Supabase 私有课件库，单个文件不超过 50 MB。</span>
             </div>
             ${textarea("notes", "课件说明")}
           </div>
@@ -411,16 +536,12 @@
       </section>
     `;
     if (canManageMaterials) {
-      bindForm("addMaterial", (data, form) => {
-        const file = form.querySelector("input[type=file]").files[0];
-        state.materials.unshift({ id: uid(), ...data, fileName: file ? file.name : "未选择文件", source: "local" });
-        saveAndRender();
-      });
+      bindForm("addMaterial", uploadMaterial);
     }
     const renderRows = () => {
       const query = document.getElementById("materialSearch").value.trim().toLowerCase();
       const filter = document.getElementById("materialFilter").value;
-      const rows = state.materials.filter((item) => {
+      const rows = materials.filter((item) => {
         const haystack = `${item.title} ${item.grade} ${item.category}`.toLowerCase();
         return haystack.includes(query) && (filter === "全部" || item.category === filter);
       });
@@ -689,23 +810,93 @@
     return Math.round((clean.reduce((sum, value) => sum + value, 0) / clean.length) * 10) / 10;
   }
 
-  function downloadMaterial(id) {
-    const item = state.materials.find((material) => material.id === id);
-    const content = `课件下载模拟\n名称：${item.title}\n文件：${item.fileName}\n年级：${item.grade}\n分类：${item.category}\n说明：${item.notes || ""}`;
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${item.title}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+  async function uploadMaterial(data, form) {
+    if (!cloudSession || !cloudProfile || !["admin", "teacher"].includes(cloudProfile.role)) return;
+    const file = form.querySelector("input[type=file]").files[0];
+    if (!file) return notify("请选择课件文件。", "error");
+    if (file.size > 50 * 1024 * 1024) return notify("课件文件不能超过 50 MB。", "error");
+
+    const submitButton = form.querySelector("button[type=submit]");
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
+    const storagePath = `${cloudSession.user.id}/${crypto.randomUUID()}-${safeFileName}`;
+    submitButton.disabled = true;
+    submitButton.textContent = "上传中";
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from(cloudConfig.materialsBucket)
+      .upload(storagePath, file, { contentType: file.type, upsert: false });
+    if (uploadError) {
+      submitButton.disabled = false;
+      submitButton.textContent = "保存课件";
+      return notify(`上传失败：${uploadError.message}`, "error");
+    }
+
+    const { data: material, error: insertError } = await supabaseClient
+      .from("materials")
+      .insert({
+        title: data.title,
+        grade: data.grade,
+        category: data.category,
+        year: Number(data.year),
+        file_name: file.name,
+        storage_path: storagePath,
+        notes: data.notes || "",
+        uploaded_by: cloudSession.user.id
+      })
+      .select("id, title, grade, category, year, file_name, storage_path, notes, created_at")
+      .single();
+
+    if (insertError) {
+      await supabaseClient.storage.from(cloudConfig.materialsBucket).remove([storagePath]);
+      submitButton.disabled = false;
+      submitButton.textContent = "保存课件";
+      return notify(`保存课件信息失败：${insertError.message}`, "error");
+    }
+
+    cloudMaterials.unshift(mapCloudMaterial(material));
+    notify("课件已上传到云端。", "success");
+    render();
   }
 
-  function deleteMaterial(id) {
-    if (!["admin", "teacher"].includes(state.role)) return;
-    const item = state.materials.find((material) => material.id === id);
+  async function downloadMaterial(id) {
+    if (!cloudSession) return notify("请先登录后下载课件。", "error");
+    const item = cloudMaterials.find((material) => material.id === id);
+    if (!item) return;
+    const { data, error } = await supabaseClient.storage
+      .from(cloudConfig.materialsBucket)
+      .createSignedUrl(item.storagePath, 60, { download: item.fileName });
+    if (error) return notify(`下载失败：${error.message}`, "error");
+    const link = document.createElement("a");
+    link.href = data.signedUrl;
+    link.download = item.fileName;
+    link.rel = "noopener";
+    link.click();
+  }
+
+  async function deleteMaterial(id) {
+    if (!cloudSession || !cloudProfile || !["admin", "teacher"].includes(cloudProfile.role)) return;
+    const item = cloudMaterials.find((material) => material.id === id);
     if (!item || !window.confirm(`确定删除课件“${item.title}”吗？`)) return;
-    state.materials = state.materials.filter((material) => material.id !== id);
-    saveAndRender();
+    const { error: storageError } = await supabaseClient.storage
+      .from(cloudConfig.materialsBucket)
+      .remove([item.storagePath]);
+    if (storageError) return notify(`删除文件失败：${storageError.message}`, "error");
+    const { error: databaseError } = await supabaseClient
+      .from("materials")
+      .delete()
+      .eq("id", id);
+    if (databaseError) return notify(`删除课件记录失败：${databaseError.message}`, "error");
+    cloudMaterials = cloudMaterials.filter((material) => material.id !== id);
+    notify("课件已删除。", "success");
+    render();
+  }
+
+  function notify(message, tone = "success") {
+    els.appNotice.textContent = message;
+    els.appNotice.className = `app-notice show ${tone}`;
+    window.clearTimeout(notify.timer);
+    notify.timer = window.setTimeout(() => {
+      els.appNotice.className = "app-notice";
+    }, 4200);
   }
 })();

@@ -27,6 +27,7 @@
             <small id="userRoleName">教师</small>
           </div>
         </div>
+        <button id="authButton" class="secondary auth-button" type="button">登录</button>
       </div>
     </header>
 
@@ -57,6 +58,32 @@
       </div>
     </template>
 
+    <dialog id="authDialog" class="auth-dialog">
+      <form id="authForm" class="auth-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Supabase</p>
+            <h2>账号登录</h2>
+          </div>
+          <button id="closeAuthDialog" class="icon-button" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div class="field">
+          <label for="authEmail">邮箱</label>
+          <input id="authEmail" name="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="authPassword">密码</label>
+          <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <p id="authError" class="form-error" role="alert"></p>
+        <div class="actions"><button class="primary" type="submit">登录</button></div>
+      </form>
+    </dialog>
+
+    <div id="appNotice" class="app-notice" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
